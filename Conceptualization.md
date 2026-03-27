@@ -35,6 +35,7 @@
 ## 2. System Context Diagram
 
 ![System Context Diagram](./system_context_diagram.png)
+<img width="439" height="601" alt="system_context_diagram" src="https://github.com/user-attachments/assets/2fa25547-36f0-4221-8161-2d5764aa6535" />
 
 ---
 
