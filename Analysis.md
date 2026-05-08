@@ -1,4 +1,3 @@
-<img width="640" height="667" alt="image-1" src="https://github.com/user-attachments/assets/863b7861-9047-4d37-999b-03081929d5a1" />
 # Mystery Survival
 
 
@@ -27,7 +26,7 @@ Mystery Survival은 시각 정보를 최소화하고 공간 음향(Spatial Audio
 
 ## 2. Use Case analysis
 
-![alt text](image-1.png)
+<img width="640" height="667" alt="image-1" src="https://github.com/user-attachments/assets/863b7861-9047-4d37-999b-03081929d5a1" />
 
 Player는 게임 시작, 환경 탐색, 이동 조작, 손전등 사용, 적 회피, 목표 달성의 6가지 유스케이스와 직접 상호작용하며, System은 게임 종료, 적 반응, 체력 감소의 3가지 유스케이스를 담당한다.
 
