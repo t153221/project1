@@ -1,3 +1,4 @@
+<img width="640" height="667" alt="image-1" src="https://github.com/user-attachments/assets/863b7861-9047-4d37-999b-03081929d5a1" />
 # Mystery Survival
 
 
