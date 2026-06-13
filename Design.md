@@ -32,13 +32,11 @@
 
 **설계의 주요 포인트**는 다음과 같다.
 
-첫째, 게임의 핵심 메커니즘인 청각 기반 인터랙션을 AudioSystem과 EscapeZone 클래스를 중심으로 설계하였다. Spatial Audio 처리와 Attenuation 적용을 AudioSystem이 전담하며, 탈출 지점에서 발생하는 환경음이 플레이어에게 방향 정보를 제공한다.
+첫째, 게임의 핵심 메커니즘인 청각 기반 인터랙션을 EscapeZone 클래스를 중심으로 설계하였다. 언리얼 엔진의 Sound Cue, Attenuation Settings, Resonance Audio Plugin을 활용하여 탈출 지점에서 발생하는 환경음이 플레이어에게 방향 정보를 제공한다.
 
 둘째, 적 AI의 추적 로직을 EnemyController가 담당하며, AI MoveTo를 이용하여 매 프레임 플레이어 위치를 목표로 이동한다. 플레이어와 접촉 시 즉시 게임 오버 조건이 발생한다.
 
-셋째, GameManager가 게임 전체 흐름(메인 메뉴 → 플레이 → 게임 오버/클리어)을 제어하며, 각 서브시스템(AudioSystem, UIManager, EscapeZone)과의 인터랙션을 조율한다.
-
-넷째, UIManager가 플레이어, 적, 탈출 지점의 월드 좌표를 화면 좌표로 변환하여 HUD 아이콘 위치를 매 프레임 갱신한다.
+셋째, UIManager가 플레이어, 적, 탈출 지점의 월드 좌표를 화면 좌표로 변환하여 HUD 아이콘 위치를 매 프레임 갱신한다.
 
 ---
 
@@ -56,29 +54,11 @@ classDiagram
         +GetPosition() Vector3D
     }
 
-    class AudioSystem {
-        -AttenuationSettings attenuation
-        -List~SoundCue~ activeSounds
-        +PlaySound(cue: SoundCue, location: Vector3D) void
-        +StopAllSounds() void
-        +ApplySpatialAudio(cue: SoundCue, listenerPos: Vector3D) void
-        +ApplyAttenuation(cue: SoundCue, distance: float) void
-        +ApplyHRTF(cue: SoundCue) void
-    }
-
     class EnemyController {
         -float moveSpeed
         -PlayerController targetActor
         +ChaseTarget(targetPos: Vector3D) void
         +GetCurrentPosition() Vector3D
-    }
-
-    class GameManager {
-        -GameState currentState
-        -bool escapeZoneReached
-        +StartGame() void
-        +EndGame(result: GameResult) void
-        +GetCurrentState() GameState
     }
 
     class EscapeZone {
@@ -99,18 +79,12 @@ classDiagram
         +ShowMainMenu() void
     }
 
-    PlayerController "1" --> "1" AudioSystem : uses
     EnemyController "*" --> "1" PlayerController : chases
-    AudioSystem "1" --> "1" EscapeZone : plays sound at
-    GameManager "1" --> "1" PlayerController : manages
-    GameManager "1" --> "*" EnemyController : manages
-    GameManager "1" --> "1" UIManager : manages
-    GameManager "1" --> "1" EscapeZone : monitors
-    GameManager "1" --> "1" AudioSystem : controls
+    PlayerController ..> UIManager : notifies
+    EscapeZone ..> UIManager : notifies
     UIManager ..> PlayerController : observes
     UIManager ..> EnemyController : observes
     UIManager ..> EscapeZone : observes
-    EscapeZone ..> GameManager : notifies
 ```
 
 ---
@@ -130,21 +104,6 @@ classDiagram
 
 ---
 
-#### AudioSystem
-
-| 항목 | 내용 |
-|---|---|
-| **역할** | 게임 내 모든 사운드 재생과 공간 음향 처리를 담당한다. |
-| **attenuation** | 거리 감쇠 설정 정보 |
-| **activeSounds** | 현재 재생 중인 Sound Cue 목록 |
-| **PlaySound()** | 지정 위치에서 Sound Cue를 재생하고 Spatial Audio를 적용한다. |
-| **StopAllSounds()** | 현재 재생 중인 모든 사운드를 중단한다. (게임 종료 시 호출) |
-| **ApplySpatialAudio()** | 소리의 방향과 거리를 좌우/전후 채널로 분리하여 처리한다. |
-| **ApplyAttenuation()** | 거리에 따라 음량을 감쇠 적용한다. |
-| **ApplyHRTF()** | 헤드폰 출력 환경에서 HRTF 기반 입체 음향을 추가 적용한다. |
-
----
-
 #### EnemyController
 
 | 항목 | 내용 |
@@ -154,18 +113,6 @@ classDiagram
 | **targetActor** | 추적 대상(플레이어) 참조 |
 | **ChaseTarget()** | NavMesh를 이용해 플레이어 위치로 이동한다. 경로 탐색 실패 시 직선 이동을 시도한다. |
 | **GetCurrentPosition()** | 현재 위치를 반환한다. UIManager가 아이콘 표시에 사용한다. |
-
----
-
-#### GameManager
-
-| 항목 | 내용 |
-|---|---|
-| **역할** | 게임 전체 흐름(시작, 진행, 종료)을 제어한다. |
-| **currentState** | 현재 게임 상태 (MainMenu / Playing / GameOver / Clear) |
-| **escapeZoneReached** | 탈출 지점 도달 여부 |
-| **StartGame()** | 씬을 로드하고 각 서브시스템을 초기화한다. |
-| **EndGame()** | 결과 화면을 표시한다. |
 
 ---
 
@@ -202,23 +149,22 @@ classDiagram
 ```mermaid
 sequenceDiagram
     actor Player
-    participant GameManager
-    participant AudioSystem
+    participant WBP_MainMenu
+    participant PlayerController
+    participant EscapeZone
     participant UIManager
 
-    Player->>GameManager: 게임 시작 버튼 선택
-    GameManager->>GameManager: 게임 씬 로드 (< 5초)
+    Player->>WBP_MainMenu: START 버튼 선택
+    WBP_MainMenu->>WBP_MainMenu: Open Level (게임 씬 로드, < 5초)
     alt 씬 로드 성공
-        GameManager->>Player: 플레이어 캐릭터 초기 위치 배치
-        GameManager->>AudioSystem: 탈출 지점 환경음 재생 시작
-        GameManager->>UIManager: 게임 HUD 표시
+        PlayerController->>UIManager: WBP_HUD 생성 및 표시
+        EscapeZone->>EscapeZone: 환경음 재생 시작 (Play Sound at Location)
     else 씬 로드 실패
-        GameManager->>UIManager: 오류 메시지 표시
-        GameManager->>UIManager: 메인 메뉴로 복귀
+        WBP_MainMenu->>Player: 오류 메시지 표시 후 메인 메뉴 유지
     end
 ```
 
-**설명**: 플레이어가 메인 메뉴에서 게임 시작 버튼을 누르면 GameManager가 씬을 로드하고 각 서브시스템(AudioSystem, UIManager)을 초기화한다. 씬 로드 실패 시 오류 메시지를 표시하고 메인 메뉴로 복귀한다.
+**설명**: 플레이어가 메인 메뉴(WBP_MainMenu)에서 START 버튼을 누르면 Open Level 노드로 게임 씬을 로드한다. 씬 로드 후 BP_Player의 Begin Play에서 WBP_HUD가 생성되고, BP_EscapeZone의 Begin Play에서 공간 음향이 재생된다.
 
 ---
 
@@ -228,7 +174,6 @@ sequenceDiagram
 sequenceDiagram
     actor Player
     participant PlayerController
-    participant AudioSystem
     participant UIManager
 
     Player->>PlayerController: 이동 입력 (WASD)
@@ -236,8 +181,7 @@ sequenceDiagram
     alt 장애물 없음
         PlayerController->>PlayerController: 캐릭터 이동
         PlayerController->>PlayerController: 마우스 방향으로 캐릭터 회전
-        PlayerController->>AudioSystem: 발걸음 소리 재생 요청
-        AudioSystem->>AudioSystem: 사운드 재생
+        PlayerController->>PlayerController: 발걸음 소리 재생 (Play Sound at Location)
         UIManager->>UIManager: 플레이어 아이콘 위치 갱신
     else 장애물 충돌
         PlayerController->>PlayerController: 해당 방향 이동 중단
@@ -247,7 +191,7 @@ sequenceDiagram
     PlayerController->>PlayerController: 이동 정지
 ```
 
-**설명**: 플레이어의 이동 입력에 따라 캐릭터가 이동하며, AudioSystem이 발걸음 소리를 재생한다. UIManager는 플레이어 아이콘 위치를 매 프레임 갱신한다. 마우스 커서 방향으로 캐릭터가 회전한다.
+**설명**: 플레이어의 이동 입력에 따라 캐릭터가 이동하며, BP_Player 내부에서 Play Sound at Location 노드로 발걸음 소리를 재생한다. UIManager(WBP_HUD)는 플레이어 아이콘 위치를 매 프레임 갱신한다. 마우스 커서 방향으로 캐릭터가 회전한다.
 
 ---
 
@@ -256,23 +200,21 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant EscapeZone
-    participant AudioSystem
     actor Player
 
-    EscapeZone->>AudioSystem: 환경음 재생 요청 (위치, 음량)
-    AudioSystem->>AudioSystem: Spatial Audio 방식으로 처리
-    AudioSystem->>AudioSystem: 거리에 따른 Attenuation 적용
-    AudioSystem->>AudioSystem: 방향 정보를 좌우/전후 채널 분리
+    EscapeZone->>EscapeZone: Begin Play → Play Sound at Location (모노 파일, NewSoundAttenuation)
+    EscapeZone->>EscapeZone: Attenuation 적용 (거리에 따른 음량 감쇠)
+    EscapeZone->>EscapeZone: Spatialization 적용 (방향 정보 좌우/전후 채널 분리)
 
     alt 헤드폰 출력 환경
-        AudioSystem->>AudioSystem: HRTF 기반 입체 음향 추가 적용
+        EscapeZone->>EscapeZone: Resonance Audio Plugin → HRTF 기반 입체 음향 적용
     end
 
-    AudioSystem->>Player: 방향/거리 정보가 반영된 소리 전달
+    EscapeZone->>Player: 방향/거리 정보가 반영된 소리 전달
     Player->>Player: 소리의 방향과 거리를 청각으로 인지
 ```
 
-**설명**: 탈출 지점(EscapeZone)이 소리를 발생시키면 AudioSystem이 Spatial Audio와 Attenuation을 적용하여 플레이어에게 전달한다. 헤드폰 환경에서는 HRTF 기반 입체 음향이 추가 적용된다.
+**설명**: 탈출 지점(BP_EscapeZone)의 Begin Play에서 Play Sound at Location 노드로 모노 파일을 재생한다. NewSoundAttenuation 설정과 Resonance Audio Plugin을 통해 거리 감쇠 및 방향성이 적용되어 플레이어에게 전달된다.
 
 ---
 
@@ -309,26 +251,25 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant EnemyController
+    participant PlayerController
     participant UIManager
-    participant GameManager
     actor Player
 
-    EnemyController->>EnemyController: 플레이어와 접촉(Overlap) 감지
-    EnemyController->>GameManager: 게임 오버 조건 전달
-    GameManager->>GameManager: 게임 상태 → GameOver
-    GameManager->>UIManager: 게임 오버 화면 표시 (CAPTURED)
-    UIManager->>Player: 재시작 / 종료 옵션 제공
+    EnemyController->>PlayerController: 접촉(ActorBeginOverlap) 감지
+    PlayerController->>PlayerController: Cast to BP_Enemy 성공
+    PlayerController->>UIManager: WBP_GameOver 생성 및 Add to Viewport
+    UIManager->>Player: 재시작(RESTART) / 종료(QUIT) 옵션 제공
 
     alt 재시작 선택
-        Player->>GameManager: 재시작
-        GameManager->>GameManager: StartGame() (Use Case #1)
+        Player->>UIManager: RESTART 버튼 클릭
+        UIManager->>UIManager: Open Level "Untitled"
     else 종료 선택
-        Player->>GameManager: 종료
-        GameManager->>GameManager: 게임 종료
+        Player->>UIManager: QUIT 버튼 클릭
+        UIManager->>UIManager: Quit Game
     end
 ```
 
-**설명**: 적이 플레이어와 접촉하면 GameManager에 게임 오버 조건이 전달되고, 즉시 게임 오버 화면(CAPTURED)이 표시된다. 플레이어는 재시작 또는 종료를 선택할 수 있다.
+**설명**: BP_Enemy가 BP_Player와 Overlap되면 BP_Player의 ActorBeginOverlap 이벤트에서 Cast to BP_Enemy 후 WBP_GameOver 위젯을 생성하여 화면에 표시한다. 플레이어는 재시작 또는 종료를 선택할 수 있다.
 
 ---
 
@@ -339,29 +280,24 @@ sequenceDiagram
     actor Player
     participant PlayerController
     participant EscapeZone
-    participant GameManager
-    participant AudioSystem
     participant UIManager
 
-    Player->>PlayerController: 청각적 단서로 탈출 지점 방향 파악
-    PlayerController->>EscapeZone: 탈출 지점 도달 감지
-    EscapeZone->>GameManager: 클리어 조건 전달
-
-    GameManager->>AudioSystem: 모든 사운드 중단
-    GameManager->>GameManager: 게임 상태 → Clear
-    GameManager->>UIManager: 클리어 화면 표시 (< 5초)
-    UIManager->>Player: 재시작 / 종료 옵션 제공
+    Player->>PlayerController: 청각적 단서(환경음)로 탈출 지점 방향 파악
+    PlayerController->>EscapeZone: 탈출 지점 도달 (ActorBeginOverlap)
+    EscapeZone->>EscapeZone: Cast to BP_Player 성공
+    EscapeZone->>UIManager: WBP_Clear 생성 및 Add to Viewport
+    UIManager->>Player: 재시작(RESTART) / 종료(QUIT) 옵션 제공
 
     alt 재시작 선택
-        Player->>GameManager: 재시작
-        GameManager->>GameManager: StartGame() (Use Case #1)
+        Player->>UIManager: RESTART 버튼 클릭
+        UIManager->>UIManager: Open Level "Untitled"
     else 종료 선택
-        Player->>GameManager: 종료
-        GameManager->>GameManager: 게임 종료
+        Player->>UIManager: QUIT 버튼 클릭
+        UIManager->>UIManager: Quit Game
     end
 ```
 
-**설명**: 플레이어가 청각적 단서(환경음)를 통해 탈출 지점을 파악하고 도달하면 EscapeZone이 GameManager에 클리어 조건을 전달한다. GameManager는 모든 사운드를 중단하고 5초 이내에 클리어 화면을 표시한다.
+**설명**: 플레이어가 청각적 단서(환경음)를 통해 탈출 지점 방향을 파악하고 BP_EscapeZone에 도달하면 ActorBeginOverlap 이벤트에서 Cast to BP_Player 후 WBP_Clear 위젯을 생성하여 화면에 표시한다.
 
 ---
 
@@ -494,9 +430,7 @@ stateDiagram-v2
 | **Player** | 게임을 조작하는 사용자 및 플레이어 캐릭터 |
 | **Enemy / Enemy_AI** | 플레이어를 추적하는 적 AI 개체 |
 | **PlayerController** | 플레이어의 이동, 방향 전환을 관리하는 클래스 |
-| **AudioSystem** | 게임 내 사운드 재생과 공간 음향 처리를 담당하는 클래스 |
 | **EnemyController** | 적 AI의 추적 행동을 담당하는 클래스 |
-| **GameManager** | 게임 전체 흐름(시작/진행/종료)을 제어하는 클래스 |
 | **EscapeZone** | 플레이어 도달 시 클리어 조건을 전달하는 탈출 지점 클래스 |
 | **UIManager** | 플레이어/적/목적지 아이콘 HUD UI를 관리하는 클래스 |
 | **Spatial Audio** | 소리의 방향과 거리를 입체적으로 표현하는 3D 오디오 기술 |
@@ -507,7 +441,6 @@ stateDiagram-v2
 | **NavMesh** | Navigation Mesh. 적 AI가 장애물을 우회하여 경로를 탐색하는 데 사용하는 탐색 가능 영역 메시 |
 | **AI MoveTo** | 언리얼 엔진에서 AI가 지정된 목표 위치로 NavMesh 경로를 통해 이동하도록 하는 기능 |
 | **Post Processing** | 렌더링된 화면에 밝기 조정 등의 시각 효과를 추가하는 처리 과정 |
-| **GameState** | 게임의 전체 상태를 나타내는 열거형 (MainMenu / Playing / GameOver / Clear) |
 | **HUD** | Heads-Up Display. 게임 화면에 오버레이로 표시되는 아이콘 등의 UI 요소 |
 
 ---
